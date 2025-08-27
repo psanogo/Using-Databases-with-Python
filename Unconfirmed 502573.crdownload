@@ -1,0 +1,82 @@
+import sqlite3
+import urllib.request
+
+# --- Download the data file if it doesn't exist ---
+# You can also manually download http://www.py4e.com/code3/mbox.txt
+# and place it in the same folder as this script.
+try:
+    fhand = open('mbox.txt')
+    print("mbox.txt found locally.")
+except:
+    print("mbox.txt not found, downloading...")
+    url = 'http://www.py4e.com/code3/mbox.txt'
+    urllib.request.urlretrieve(url, 'mbox.txt')
+    fhand = open('mbox.txt')
+    print("mbox.txt downloaded.")
+
+# --- Database Setup ---
+conn = sqlite3.connect('orgdb.sqlite')
+cur = conn.cursor()
+
+# Clean up before running
+cur.execute('DROP TABLE IF EXISTS Counts')
+
+# Create the table as per the assignment's schema
+cur.execute('''
+CREATE TABLE Counts (org TEXT, count INTEGER)''')
+
+# --- Data Processing ---
+for line in fhand:
+    # Find lines with sender information
+    if not line.startswith('From: '):
+        continue
+    
+    pieces = line.split()
+    email = pieces[1]
+    
+    # Extract the organization from the email address
+    # e.g., from 'stephen.marquard@uct.ac.za' we get 'uct.ac.za'
+    org = email.split('@')[1]
+    
+    # Update the count for the organization in the database
+    cur.execute('SELECT count FROM Counts WHERE org = ? ', (org,))
+    row = cur.fetchone()
+    if row is None:
+        # If the organization is new, insert it with a count of 1
+        cur.execute('''INSERT INTO Counts (org, count)
+                VALUES (?, 1)''', (org,))
+    else:
+        # If the organization already exists, increment its count
+        cur.execute('UPDATE Counts SET count = count + 1 WHERE org = ?',
+                    (org,))
+
+# Commit all the changes to the database at once after the loop
+# This is much faster than committing inside the loop.
+conn.commit()
+
+# --- Verification ---
+# Print the top 10 organizations to verify the result
+print("\nTop 10 Organizations:")
+sqlstr = 'SELECT org, count FROM Counts ORDER BY count DESC LIMIT 10'
+
+for row in cur.execute(sqlstr):
+    print(str(row[0]), row[1])
+
+# Close the database connection
+cur.close()
+conn.close()
+
+print("\nDatabase 'orgdb.sqlite' created successfully.")
+print("You can now upload this file for grading.")
+
+Top 10 Organizations:
+iupui.edu 536
+umich.edu 491
+indiana.edu 178
+caret.cam.ac.uk 157
+vt.edu 110
+uct.ac.za 96
+media.berkeley.edu 56
+ufp.pt 28
+gmail.com 25
+et.gatech.edu 17
